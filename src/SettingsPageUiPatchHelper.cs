@@ -45,16 +45,7 @@ namespace BaoMiHuaPatch
             }
 
             FrameworkElement section = BuildSection();
-            FrameworkElement anchorChild = FindDirectChild(container, anchor);
-            if (anchorChild != null)
-            {
-                int insertIndex = container.Children.IndexOf(anchorChild) + 1;
-                container.Children.Insert(insertIndex, section);
-            }
-            else
-            {
-                container.Children.Add(section);
-            }
+            InsertSection(container, section, anchor);
         }
 
         private static FrameworkElement BuildSection()
@@ -252,52 +243,73 @@ namespace BaoMiHuaPatch
 
         private static FrameworkElement ResolveAnchorElement(FrameworkElement page)
         {
-            FrameworkElement anchor = GetPrivateFieldValue(page, "hu") as FrameworkElement;
+            FrameworkElement anchor = FindElementByText(page, "硬件加速");
             if (anchor != null)
             {
                 return anchor;
             }
 
-            anchor = GetPrivateFieldValue(page, "hT") as FrameworkElement;
-            if (anchor != null)
-            {
-                return anchor;
-            }
-
-            return FindElementByText(page, "硬件加速");
+            return FindFirstSettingsAnchor(page);
         }
 
         private static Panel ResolveVisibleContainer(FrameworkElement page, FrameworkElement anchor)
         {
             StackPanel anchorStackPanel = FindTopmostStackPanelAncestor(anchor, page);
-            if (anchorStackPanel != null)
+            if (IsLikelySettingsContainer(anchorStackPanel))
             {
                 return anchorStackPanel;
             }
 
-            ScrollViewer scrollViewer = GetPrivateFieldValue(page, "hQ") as ScrollViewer;
+            StackPanel reflectedStackPanel = FindPrivateStackPanelFieldValue(page);
+            if (reflectedStackPanel != null)
+            {
+                return reflectedStackPanel;
+            }
+
+            ScrollViewer scrollViewer = FindPrivateScrollViewerFieldValue(page);
+            if (scrollViewer == null)
+            {
+                scrollViewer = FindFirstScrollViewer(page);
+            }
+
             if (scrollViewer != null)
             {
-                Panel panel = UnwrapPanel(scrollViewer.Content);
-                if (panel != null)
+                StackPanel contentStackPanel = UnwrapPanel(scrollViewer.Content) as StackPanel;
+                if (IsLikelySettingsContainer(contentStackPanel))
                 {
-                    return panel;
+                    return contentStackPanel;
                 }
 
-                Panel descendantPanel = FindFirstStackPanel(scrollViewer);
-                if (descendantPanel != null)
+                StackPanel descendantPanel = FindFirstStackPanel(scrollViewer);
+                if (IsLikelySettingsContainer(descendantPanel))
                 {
                     return descendantPanel;
                 }
             }
 
-            Panel legacyPanel = GetPrivateFieldValue(page, "hr") as Panel;
-            if (legacyPanel != null)
+            StackPanel pageStackPanel = FindFirstStackPanel(page);
+            if (IsLikelySettingsContainer(pageStackPanel))
             {
-                return legacyPanel;
+                return pageStackPanel;
             }
 
-            return FindFirstPanel(page);
+            return null;
+        }
+
+        private static void InsertSection(Panel container, FrameworkElement section, FrameworkElement anchor)
+        {
+            FrameworkElement anchorChild = FindDirectChild(container, anchor);
+            if (anchorChild != null)
+            {
+                int insertIndex = container.Children.IndexOf(anchorChild) + 1;
+                if (insertIndex > 0)
+                {
+                    container.Children.Insert(insertIndex, section);
+                    return;
+                }
+            }
+
+            container.Children.Add(section);
         }
 
         private static Panel UnwrapPanel(object content)
@@ -334,32 +346,6 @@ namespace BaoMiHuaPatch
                 }
 
                 current = parent;
-            }
-
-            return null;
-        }
-
-        private static Panel FindFirstPanel(DependencyObject root)
-        {
-            if (root == null)
-            {
-                return null;
-            }
-
-            Panel panel = root as Panel;
-            if (panel != null)
-            {
-                return panel;
-            }
-
-            int childrenCount = VisualTreeHelper.GetChildrenCount(root);
-            for (int index = 0; index < childrenCount; index++)
-            {
-                Panel match = FindFirstPanel(VisualTreeHelper.GetChild(root, index));
-                if (match != null)
-                {
-                    return match;
-                }
             }
 
             return null;
@@ -412,6 +398,109 @@ namespace BaoMiHuaPatch
             }
 
             return null;
+        }
+
+        private static ScrollViewer FindFirstScrollViewer(DependencyObject root)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            ScrollViewer scrollViewer = root as ScrollViewer;
+            if (scrollViewer != null)
+            {
+                return scrollViewer;
+            }
+
+            int childrenCount = VisualTreeHelper.GetChildrenCount(root);
+            for (int index = 0; index < childrenCount; index++)
+            {
+                ScrollViewer match = FindFirstScrollViewer(VisualTreeHelper.GetChild(root, index));
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        private static FrameworkElement FindFirstSettingsAnchor(DependencyObject root)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            // 优先找设置项自身的交互控件，避免把补丁插进根 Grid 导致更新后叠层。
+            FrameworkElement element = root as FrameworkElement;
+            if (element != null &&
+                (element is CheckBox || element is ToggleSwitch))
+            {
+                return element;
+            }
+
+            int childrenCount = VisualTreeHelper.GetChildrenCount(root);
+            for (int index = 0; index < childrenCount; index++)
+            {
+                FrameworkElement match = FindFirstSettingsAnchor(VisualTreeHelper.GetChild(root, index));
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        private static StackPanel FindPrivateStackPanelFieldValue(object instance)
+        {
+            if (instance == null)
+            {
+                return null;
+            }
+
+            FieldInfo[] fields = instance.GetType().GetFields(
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            for (int index = 0; index < fields.Length; index++)
+            {
+                StackPanel value = fields[index].GetValue(instance) as StackPanel;
+                if (IsLikelySettingsContainer(value))
+                {
+                    return value;
+                }
+            }
+
+            return null;
+        }
+
+        private static ScrollViewer FindPrivateScrollViewerFieldValue(object instance)
+        {
+            if (instance == null)
+            {
+                return null;
+            }
+
+            FieldInfo[] fields = instance.GetType().GetFields(
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            for (int index = 0; index < fields.Length; index++)
+            {
+                ScrollViewer value = fields[index].GetValue(instance) as ScrollViewer;
+                if (value != null)
+                {
+                    return value;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool IsLikelySettingsContainer(StackPanel panel)
+        {
+            return panel != null &&
+                panel.Children.Count > 0 &&
+                FindFirstSettingsAnchor(panel) != null;
         }
 
         private static FrameworkElement FindElementByText(DependencyObject root, string text)
