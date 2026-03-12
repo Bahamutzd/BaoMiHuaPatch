@@ -3,12 +3,15 @@ setlocal EnableExtensions DisableDelayedExpansion
 title BaoMiHua Patch Launcher
 
 set "PACKAGE_DIR=%~dp0"
+set "POWERSHELL_EXE=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+set "PATCH_SCRIPT=%PACKAGE_DIR%Apply-BaoMiHua-Patches.ps1"
 set "EXTERNAL_PATCHER=%PACKAGE_DIR%PatchBaoMiHuaExternalPlayer.exe"
 set "EXTERNAL_HELPER=%PACKAGE_DIR%ExternalPlayerPatchHelper.dll"
 set "SETTINGS_PATCHER=%PACKAGE_DIR%PatchBaoMiHuaSettingsPageUi.exe"
 set "SETTINGS_HELPER=%PACKAGE_DIR%SettingsPageUiPatchHelper.dll"
 set "BACKUP_DIR=%PACKAGE_DIR%backups"
 
+if not exist "%PATCH_SCRIPT%" goto :missing_patch_script
 if not exist "%EXTERNAL_PATCHER%" goto :missing_external_patcher
 if not exist "%EXTERNAL_HELPER%" goto :missing_external_helper
 if not exist "%SETTINGS_PATCHER%" goto :missing_settings_patcher
@@ -55,24 +58,17 @@ if /I not "%TARGET_NAME%"=="BaoMiHua.dll" goto :target_wrong_name
 mkdir "%BACKUP_DIR%" >nul 2>nul
 
 echo.
-echo [1/2] Applying external player patch...
-"%EXTERNAL_PATCHER%" "%TARGET_DLL%" "%EXTERNAL_HELPER%" "%BACKUP_DIR%\BaoMiHua.dll.pre-external-player.bak"
-if errorlevel 1 goto :external_patch_failed
-
-echo.
-echo [2/2] Applying settings page UI patch...
-"%SETTINGS_PATCHER%" "%TARGET_DLL%" "%SETTINGS_HELPER%" "%BACKUP_DIR%\BaoMiHua.dll.pre-settings-ui.bak"
-if errorlevel 1 goto :settings_patch_failed
-
-echo.
-echo [DONE] Patch applied successfully:
-echo %TARGET_DLL%
-echo.
-echo Backups:
-echo %BACKUP_DIR%
-echo.
+echo Launching patch script...
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PATCH_SCRIPT%" -TargetDll "%TARGET_DLL%" -BackupDir "%BACKUP_DIR%"
+if errorlevel 1 goto :script_failed
 pause
 exit /b 0
+
+:missing_patch_script
+echo.
+echo [ERROR] Missing file:
+echo %PATCH_SCRIPT%
+goto :fail
 
 :missing_external_patcher
 echo.
@@ -115,19 +111,22 @@ echo [ERROR] The target file name must be BaoMiHua.dll:
 echo %TARGET_DLL%
 goto :fail
 
-:external_patch_failed
+:script_failed
 echo.
-echo [ERROR] External player patch failed.
-goto :fail
-
-:settings_patch_failed
-echo.
-echo [ERROR] Settings page UI patch failed.
+echo [ERROR] Patch script failed.
+echo 上面的 PowerShell 输出已经给了更具体的原因。
 goto :fail
 
 :fail
 echo.
-echo Make sure BaoMiHua is fully closed and the target DLL is a clean base file.
+echo 常见处理：
+echo 1. 先彻底关闭 BaoMiHua，再重新执行。
+echo 2. 脚本检测到已包含 settings UI 补丁时，会优先尝试自动恢复：
+echo    %BACKUP_DIR%\BaoMiHua.dll.pre-settings-ui.bak
+echo    如果这份备份不存在或本身也已打过 UI 补丁，才需要手动处理。
+echo 3. 如果要从零重打整套补丁，先恢复：
+echo    %BACKUP_DIR%\BaoMiHua.dll.pre-external-player.bak
+echo 4. 如果当前备份目录里没有对应备份，请先准备正确的基底 DLL，再执行脚本。
 echo.
 pause
 exit /b 1

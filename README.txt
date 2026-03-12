@@ -30,8 +30,9 @@ BaoMiHua 补丁包
 
 使用前注意：
 1. 先关闭 BaoMiHua
-2. 建议仅对“原始的”或“未打过这套外部播放器补丁”的 BaoMiHua.dll 使用
-3. 如果目标 DLL 已经打过旧版补丁，请先恢复原始 DLL，再重新应用
+2. 脚本支持“已打 external patch 时自动跳过第 1 步”
+3. 如果目标 DLL 已经带了 settings UI 补丁，脚本会优先尝试自动恢复 `backups\BaoMiHua.dll.pre-settings-ui.bak` 后再重打 UI
+4. 如果目标 DLL 已经打过旧版补丁，但缺少可用备份，请先准备正确的基底 DLL 再重新应用
 
 最简单的使用方式：
 1. 把压缩包内容直接解压到 BaoMiHua 根目录
@@ -52,11 +53,23 @@ BaoMiHua 补丁包
 1. 外部播放器补丁
 2. 设置页 UI 补丁
 
+自动处理规则：
+1. 如果目标 DLL 已经包含 external patch，脚本会自动跳过第 1 步
+2. 如果目标 DLL 已经包含 settings UI patch，脚本会优先尝试用 `backups\BaoMiHua.dll.pre-settings-ui.bak` 自动恢复
+3. 如果找不到可恢复的 UI 基底备份，脚本会停止，并明确提示缺少哪份备份
+
 如果你只想手动执行，也可以分别运行：
 1. .\PatchBaoMiHuaExternalPlayer.exe "D:\Program Files\NetEase\BaoMiHua\BaoMiHua.dll" ".\ExternalPlayerPatchHelper.dll" ".\backups\BaoMiHua.dll.pre-external-player.bak"
 2. .\PatchBaoMiHuaSettingsPageUi.exe "D:\Program Files\NetEase\BaoMiHua\BaoMiHua.dll" ".\SettingsPageUiPatchHelper.dll" ".\backups\BaoMiHua.dll.pre-settings-ui.bak"
+
+备份文件用途：
+1. `BaoMiHua.dll.pre-external-player.bak`
+   这是整套补丁开始前的干净基底，适合从零重打 external + settings
+2. `BaoMiHua.dll.pre-settings-ui.bak`
+   这是已经带 external、但还没带 settings UI 的基底，适合更新 UI 补丁
 
 补充说明：
 - 本补丁包内的外部播放器 helper 已经包含 PotPlayer 起播进度逻辑
 - 本补丁包内的外部播放器 patcher 已经包含嵌套类型克隆修复
 - 重新打补丁时，不再需要额外把 ExternalPlayerPatchHelper.new.dll 丢到程序根目录
+- 双击 BAT 时，失败原因会优先显示在 PowerShell 输出里，不再只给一条笼统报错

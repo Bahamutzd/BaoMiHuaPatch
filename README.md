@@ -77,6 +77,12 @@
 1. 当前工作目录下的 `BaoMiHua.dll`
 2. 补丁包所在目录下的 `BaoMiHua.dll`
 
+脚本默认带有以下自动处理逻辑：
+
+- 如果目标 DLL 已经包含外部播放器补丁，会自动跳过 external patch，避免重复注入失败
+- 如果目标 DLL 已经包含设置页 UI 补丁，会优先尝试使用 `backups/BaoMiHua.dll.pre-settings-ui.bak` 自动恢复，再重打最新 UI 补丁
+- 如果缺少可用的 UI 基底备份，脚本会停止并给出更明确的原因和恢复建议
+
 ### 方式二：使用 PowerShell
 
 ```powershell
@@ -84,6 +90,14 @@ powershell -ExecutionPolicy Bypass -File .\Apply-BaoMiHua-Patches.ps1 -TargetDll
 ```
 
 如果不传入 `-TargetDll`，脚本会尝试从当前目录和补丁包目录自动定位 `BaoMiHua.dll`。
+
+如果要显式指定备份目录，也可以这样执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Apply-BaoMiHua-Patches.ps1 `
+  -TargetDll "D:\Program Files\NetEase\BaoMiHua\BaoMiHua.dll" `
+  -BackupDir ".\backups"
+```
 
 ### 方式三：分别执行补丁器
 
@@ -133,13 +147,21 @@ powershell -ExecutionPolicy Bypass -File .\Apply-BaoMiHua-Patches.ps1 -TargetDll
 - `Apply-BaoMiHua-Patches.bat` 与 `Apply-BaoMiHua-Patches.ps1` 默认将备份写入 `backups/`
 - 单独运行补丁 EXE 时，可通过第三个参数指定备份路径
 
+常见备份文件含义如下：
+
+- `BaoMiHua.dll.pre-external-player.bak`：整套补丁开始前的干净基底，适合“从零重打 external + settings”
+- `BaoMiHua.dll.pre-settings-ui.bak`：已经带 external、但尚未带 settings UI 的基底，适合“只更新 UI 补丁”
+
+一键脚本在检测到“目标 DLL 已经带 settings UI 补丁”时，会优先尝试自动用 `BaoMiHua.dll.pre-settings-ui.bak` 恢复，再继续重打 UI 补丁。
+
 即使工具支持自动备份，仍建议额外保留一份原始 `BaoMiHua.dll`，便于回滚和重复验证。
 
 ## 注意事项
 
 - 请在目标程序完全退出后再执行补丁
-- 建议仅对未打过同类补丁的原始 DLL 使用本工具
-- 如需重新打补丁，建议先恢复原始 DLL，再执行新的补丁版本
+- 如果只是更新设置页 UI 补丁，优先保留 external patch，并使用 `BaoMiHua.dll.pre-settings-ui.bak` 作为恢复基底
+- 如果要从零重打整套补丁，优先恢复 `BaoMiHua.dll.pre-external-player.bak`
+- 当脚本提示“自动恢复失败”时，通常说明备份缺失，或备份本身也已经被打过 UI 补丁
 - 不建议在来源不明或已被其他工具修改过的 DLL 上直接叠加执行
 
 ## 开发说明
